@@ -1,79 +1,224 @@
-<p align="center"><img src="https://res.cloudinary.com/dtfbvvkyp/image/upload/v1566331377/laravel-logolockup-cmyk-red.svg" width="400"></p>
+# Using models in migrations in Laravel application
 
-<p align="center">
-<a href="https://travis-ci.org/laravel/framework"><img src="https://travis-ci.org/laravel/framework.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/d/total.svg" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/v/stable.svg" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://poser.pugx.org/laravel/framework/license.svg" alt="License"></a>
-</p>
+Migrations in simple cases just change your database structure, add tables and columns, and you don't have to change the data you already have stored in your database. But there are cases, when it is also necessary to change data when running database migrations.
 
-## About Laravel
+When you are manipulating data within migrations, then it is recommended to never use models in migrations because models evolve in time and it breaks your migration. It is suggested that you should better use raw SQL queries or raw methods of ORM (Object Relational Mapper) what you are using.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+But, ORMs have been built for a reason to simplify working with data and there may be a solution that we could still depend on models within migrations.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+So, before we jump into a solution, let's have a case where we can reproduce the issue, we're trying to resolve.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Reproducible use case
 
-## Learning Laravel
+Set up a new Laravel project.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+```
+laravel new using-models-in-migrations
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains over 1500 video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Configure database credentials.
 
-## Laravel Sponsors
+```
+php artisan migrate
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the Laravel [Patreon page](https://patreon.com/taylorotwell).
+We see that everything worked for now.
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Cubet Techno Labs](https://cubettech.com)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[British Software Development](https://www.britishsoftware.co)**
-- **[Webdock, Fast VPS Hosting](https://www.webdock.io/en)**
-- **[DevSquad](https://devsquad.com)**
-- [UserInsights](https://userinsights.com)
-- [Fragrantica](https://www.fragrantica.com)
-- [SOFTonSOFA](https://softonsofa.com/)
-- [User10](https://user10.com)
-- [Soumettre.fr](https://soumettre.fr/)
-- [CodeBrisk](https://codebrisk.com)
-- [1Forge](https://1forge.com)
-- [TECPRESSO](https://tecpresso.co.jp/)
-- [Runtime Converter](http://runtimeconverter.com/)
-- [WebL'Agence](https://weblagence.com/)
-- [Invoice Ninja](https://www.invoiceninja.com)
-- [iMi digital](https://www.imi-digital.de/)
-- [Earthlink](https://www.earthlink.ro/)
-- [Steadfast Collective](https://steadfastcollective.com/)
-- [We Are The Robots Inc.](https://watr.mx/)
-- [Understand.io](https://www.understand.io/)
-- [Abdel Elrafa](https://abdelelrafa.com)
-- [Hyper Host](https://hyper.host)
-- [Appoly](https://www.appoly.co.uk)
-- [OP.GG](https://op.gg)
-- [云软科技](http://www.yunruan.ltd/)
+Let's now create a migration that forces `name` column to be unique in users table.
 
-## Contributing
+```
+php artisan make:migration make_name_unique_in_users
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```
+    public function up()
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->unique('name');
+        });
+    }
+```
 
-## Code of Conduct
+Seems quite straightforward and everything still works when you run the migrations again (`php artisan migrate:fresh`). However, let's expect that we already have users in the database at this point with the same names.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```
+    public function up()
+    {
+        factory(User::class, 3)->create([
+            'name' => 'Joe',
+        ]);
 
-## Security Vulnerabilities
+        factory(User::class, 2)->create([
+            'name' => 'Jane',
+        ]);
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+        Schema::table('users', function (Blueprint $table) {
+            $table->unique('name');
+        });
+    }
+```
 
-## License
+Run `php artisan migrate:fresh` and see that, we're getting now an error `SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'Joe' for key 'users.users_name_unique'`. So let's fix that by making users' names unique before changing the table structure.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```
+    public function up()
+    {
+        factory(User::class, 3)->create([
+            'name' => 'Joe',
+        ]);
+
+        factory(User::class, 2)->create([
+            'name' => 'Jane',
+        ]);
+
+        $users = User::select('name')->groupBy('name')->get();
+
+        foreach ($users as $groupedUser) {
+            $usersWithSameName = User::where('name', $groupedUser->name)->get();
+
+            foreach ($usersWithSameName as $key => $userWithSameName) {
+                $userWithSameName->name .= ' ('.$key.')';
+                $userWithSameName->save();
+            }
+        }
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->unique('name');
+        });
+    }
+```
+
+Everything seems to works again (`php artisan migrate:fresh`). Let's now make a change in our User model and add [soft deleting functionality](https://laravel.com/docs/7.x/eloquent#soft-deleting).
+
+Add `SoftDeletes` trait to User model and import it (`use Illuminate\Database\Eloquent\SoftDeletes;`).
+
+Create a migration to add the soft delete column.
+
+```
+php artisan make:migration add_soft_deletes_to_users
+```
+
+```
+    public function up()
+    {
+        Schema::table('users', function (Blueprint $table) {
+            $table->softDeletes();
+        });
+    }
+```
+
+Run `php artisan migrate:fresh` and we're getting the following error:
+
+```
+SQLSTATE[42S22]: Column not found: 1054 Unknown column 'users.deleted_at'
+```
+
+BOOM, we finally ended up with the issue why it's discouraged to ever use models in migrations - a mistake that we did to manipulate data in `make_name_unique_in_users` migration.
+
+## Solution
+
+Let's take a second and think why we ended up with that issue. The problem is, that within `make_name_unique_in_users` migration we depended on a model User. But not on the latest version of it but the version that existed at the time we created that migration.
+
+So, if we take that into account - could our migration make a snapshot of a model and use that, not the latest one?
+
+Yes, we can - which is our solution to the problem.
+
+Let take a look how to implement that.
+
+## Implementation
+
+Let's copy-paste our User model (`User.php`) which we had at the point when we created `make_name_unique_in_users` migration to somewhere we could use that. I, for example, created a directory `database/migrations/Migration_2020_04_03_055738_make_name_unique_in_users` and pasted `User.php` in there.
+
+Now, we need to tweak `composer.json` and change the autoloader section.
+
+```
+        "psr-4": {
+            "App\\": "app/",
+            "Migrations\\": "database/migrations/"
+        },
+```
+
+And create a new autoloader file, so the change would have an effect.
+
+```
+composer dump-autoload
+```
+
+And tweak the snaphot User model to have a new correct namespace.
+
+```
+<?php
+
+namespace Migrations\Migration_2020_04_03_055738_make_name_unique_in_users;
+```
+
+And switch out the User model that is used in `make_name_unique_in_users` from `App\User` to `Migrations\Migration_2020_04_03_055738_make_name_unique_in_users\User`.
+
+If you now run `php artisan migrate:fresh` you'd get `Unable to locate factory for [Migrations\Migration_2020_04_03_055738_make_name_unique_in_users\User].` error. That happens in our case, because our migration depends on User facotry as well and this in turn depends on the User model. And as we want to depend on the snaphot version of the model, we'd have to create a model factory for that version of User model. We can declare it within our migration.
+
+```
+    public function up()
+    {
+        app(Factory::class)->define(User::class, function (Faker $faker) {
+            return [
+                'name' => $faker->name,
+                'email' => $faker->unique()->safeEmail,
+                'email_verified_at' => now(),
+                'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
+                'remember_token' => Str::random(10),
+            ];
+        });
+    
+        factory(User::class, 3)->create([
+            'name' => 'Joe',
+        ]);
+
+        factory(User::class, 2)->create([
+            'name' => 'Jane',
+        ]);
+
+        $users = User::select('name')->groupBy('name')->get();
+
+        foreach ($users as $groupedUser) {
+            $usersWithSameName = User::where('name', $groupedUser->name)->get();
+
+            foreach ($usersWithSameName as $key => $userWithSameName) {
+                $userWithSameName->name .= ' ('.$key.')';
+                $userWithSameName->save();
+            }
+        }
+
+        Schema::table('users', function (Blueprint $table) {
+            $table->unique('name');
+        });
+    }
+```
+
+Make sure, you also add the imports needed when you just copy-paste the factory from `database/factories/UserFactory.php`. And you also need to import `Factory` class.
+
+```
+use Faker\Generator as Faker;
+use Illuminate\Support\Str;
+use Illuminate\Database\Eloquent\Factory;
+```
+
+We can now check that everything works, run `php artisan migrate:fresh`.
+
+```
+Dropped all tables successfully.
+Migration table created successfully.
+Migrating: 2014_10_12_000000_create_users_table
+Migrated:  2014_10_12_000000_create_users_table (0.01 seconds)
+Migrating: 2019_08_19_000000_create_failed_jobs_table
+Migrated:  2019_08_19_000000_create_failed_jobs_table (0.01 seconds)
+Migrating: 2020_04_03_055738_make_name_unique_in_users
+Migrated:  2020_04_03_055738_make_name_unique_in_users (0.03 seconds)
+Migrating: 2020_04_03_061254_add_soft_deletes_to_users
+Migrated:  2020_04_03_061254_add_soft_deletes_to_users (0 seconds)
+```
+
+## Conclusion
+
+I'm not sure if it's a bulletproof solution but ORMs have been made for a reason and it helps us (the developers) to manage data in an easier and more consistent way.
+
+Otherwise, we'd need to dive more deep how the ORM works under the hood, how it handles relations between models, etc. Moreover, with raw database queries, we may quite easily lock ourselves in a specific database implementation.
