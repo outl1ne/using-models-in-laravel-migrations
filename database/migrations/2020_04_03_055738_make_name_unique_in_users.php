@@ -1,9 +1,12 @@
 <?php
 
-use App\User;
+use Migrations\Migration_2020_04_03_055738_make_name_unique_in_users\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Eloquent\Factory;
+use Faker\Generator as Faker;
+use Illuminate\Support\Str;
 
 class MakeNameUniqueInUsers extends Migration
 {
@@ -14,6 +17,16 @@ class MakeNameUniqueInUsers extends Migration
      */
     public function up()
     {
+        app(Factory::class)->define(User::class, function (Faker $faker) {
+            return [
+                'name' => $faker->name,
+                'email' => $faker->unique()->safeEmail,
+                'email_verified_at' => now(),
+                'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
+                'remember_token' => Str::random(10),
+            ];
+        });
+    
         factory(User::class, 3)->create([
             'name' => 'Joe',
         ]);
