@@ -6,7 +6,7 @@ When you are manipulating data within migrations, then it is recommended to neve
 
 But, ORMs have been built for a reason to simplify working with data and there may be a solution that we could still depend on models within migrations.
 
-So, before we jump into a solution, let's have a case where we can reproduce the issue, we're trying to resolve.
+So, before we jump into a solution, let's have a case where we can reproduce the issue in a Laravel application, we're trying to resolve.
 
 ## Reproducible use case
 
@@ -115,21 +115,53 @@ SQLSTATE[42S22]: Column not found: 1054 Unknown column 'users.deleted_at'
 
 BOOM, we finally ended up with the issue why it's discouraged to ever use models in migrations - a mistake that we did to manipulate data in `make_name_unique_in_users` migration.
 
-## Solution
+## Raw ORM methods
 
-Let's take a second and think why we ended up with that issue. The problem is, that within `make_name_unique_in_users` migration we depended on a model User. But not on the latest version of it but the version that existed at the time we created that migration.
+We could switch out the usage of models with raw ORM methods like in the following example:
 
-So, if we take that into account - could our migration make a snapshot of a model and use that, not the latest one?
+```
+    public function up()
+    {
+        factory(User::class, 3)->create([
+            'name' => 'Joe',
+        ]);
 
-Yes, we can - which is our solution to the problem.
+        factory(User::class, 2)->create([
+            'name' => 'Jane',
+        ]);
 
-Let take a look how to implement that.
+        $users = DB::table('users')->select('name')->groupBy('name')->get();
 
-## Implementation
+        foreach ($users as $groupedUser) {
+            $usersWithSameName = DB::table('users')->where('name', $groupedUser->name)->get();
 
-Let's copy-paste our User model (`User.php`) which we had at the point when we created `make_name_unique_in_users` migration to somewhere we could use that. I, for example, created a directory `database/migrations/Migration_2020_04_03_055738_make_name_unique_in_users` and pasted `User.php` in there.
+            foreach ($usersWithSameName as $key => $userWithSameName) {
+                $userWithSameName->name .= ' ('.$key.')';
+                DB::table('users')->updateOrInsert([
+                    'id' => $userWithSameName->id,
+                ], (array) $userWithSameName);
+            }
+        }
 
-Now, we need to tweak `composer.json` and change the autoloader section.
+        Schema::table('users', function (Blueprint $table) {
+            $table->unique('name');
+        });
+    }
+```
+
+It basically works, does the job and the migrations run successfully once again (`php artisan migrate:fresh`). Although, there are downsides of using raw ORM methods instead of models - the helper methods that you're used to, are not available like `save()` and relationship methods, no mass assignment protection, etc.
+
+We could depend on raw ORM methods in migrations, but we'd have to be more careful as developers in these situation. However we may have a solution how to still use models in migrations.
+
+## Model snapshots
+
+Let's take a second and think why we ended up with that model issue in the first place. The problem was, that within `make_name_unique_in_users` migration we depended on a model User. But instead of depending on the latest version of User model (which is evolving in time), we actually wanted to use the version of User model that existing in the exact time when the migration was created.
+
+So, if we take that into account - could our migration make a snapshot of a model and use that, not the latest one? We might.
+
+Let's copy-paste our User model (`User.php`) which we had at the point when we created `make_name_unique_in_users` migration to somewhere we could use that. I, for example, created a directory `database/migrations/Migration_2020_04_03_055738_make_name_unique_in_users` and pasted `User.php` in there - acts as a snapshot of the model.
+
+Laravel doesn't recognise the classes in that location by default, why we need to tweak `composer.json` and change the autoloader section.
 
 ```
         "psr-4": {
@@ -219,6 +251,4 @@ Migrated:  2020_04_03_061254_add_soft_deletes_to_users (0 seconds)
 
 ## Conclusion
 
-I'm not sure if it's a bulletproof solution but ORMs have been made for a reason and it helps us (the developers) to manage data in an easier and more consistent way.
-
-Otherwise, we'd need to dive more deep how the ORM works under the hood, how it handles relations between models, etc. Moreover, with raw database queries, we may quite easily lock ourselves in a specific database implementation.
+The raw ORM method solution may look more elegant and preferred by many of you. It's shorter and no files have to be duplicated. However there may be times, when you really want to have those helper model methods available. And this is one way to make it happen. Just keep in mind, models can break your migrations.
