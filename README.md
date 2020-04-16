@@ -24,22 +24,11 @@ php artisan migrate
 
 We see that everything worked for now.
 
-Let's now create a migration that forces `name` column to be unique in users table.
+Let's now create a migration that forces `name` column to be unique in users table and also expect that we already have users in the database at this point with the same names.
 
 ```
 php artisan make:migration make_name_unique_in_users
 ```
-
-```
-    public function up()
-    {
-        Schema::table('users', function (Blueprint $table) {
-            $table->unique('name');
-        });
-    }
-```
-
-Seems quite straightforward and everything still works when you run the migrations again (`php artisan migrate:fresh`). However, let's expect that we already have users in the database at this point with the same names.
 
 ```
     public function up()
