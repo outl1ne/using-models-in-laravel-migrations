@@ -4,7 +4,7 @@ Migrations in simple cases just change your database structure, add tables and c
 
 When you are manipulating data within migrations, then it is recommended to never use models in migrations because models evolve in time and it breaks your migration. It is suggested that you should better use raw SQL queries or raw methods of ORM (Object Relational Mapper) what you are using.
 
-But, ORMs have been built for a reason to simplify working with data and there may be a solution that we could still depend on models within migrations.
+However, model helper functions (e.g. `User::findOrFail()` or `$user->save()`) exists for a reason, it makes working with data easier - a lot. We may have a solution where we could still depend on models within the migrations.
 
 So, before we jump into a solution, let's have a case where we can reproduce the issue in a Laravel application, we're trying to resolve.
 
@@ -186,7 +186,7 @@ namespace Migrations\Migration_2020_04_03_055738_make_name_unique_in_users;
 
 And switch out the User model that is used in `make_name_unique_in_users` from `App\User` to `Migrations\Migration_2020_04_03_055738_make_name_unique_in_users\User`.
 
-If you now run `php artisan migrate:fresh` you'd get `Unable to locate factory for [Migrations\Migration_2020_04_03_055738_make_name_unique_in_users\User].` error. That happens in our case, because our migration depends on User facotry as well and this in turn depends on the User model. And as we want to depend on the snaphot version of the model, we'd have to create a model factory for that version of User model. We can declare it within our migration.
+If you now run `php artisan migrate:fresh` you'd get `Unable to locate factory for [Migrations\Migration_2020_04_03_055738_make_name_unique_in_users\User].` error. That happens in our case, because our migration depends on User factory as well and this in turn depends on the User model. And as we want to depend on the snaphot version of the model, we'd have to create a model factory for that version of User model. We can declare it within our migration.
 
 ```
     public function up()
