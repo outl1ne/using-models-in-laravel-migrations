@@ -4,7 +4,7 @@ Migrations in simple cases just change your database structure, add tables and c
 
 When you are manipulating data within migrations, then it is recommended to never use models in migrations because models evolve in time and it breaks your migration. It is suggested that you should better use raw SQL queries or raw methods of ORM (Object Relational Mapper) what you are using.
 
-However, model helper functions (e.g. `User::findOrFail()` or `$user->save()`) exist for a reason, it makes working with data easier - a lot. We may have a solution where we could still depend on models within the migrations.
+However, model helper functions (e.g. `User::first()` or `$user->save()`) exist for a reason, it makes working with data easier - a lot. We may have a solution where we could still depend on models within the migrations.
 
 So, before we jump into a solution, let's have a case where we can reproduce the issue in a Laravel application, we're trying to resolve.
 
