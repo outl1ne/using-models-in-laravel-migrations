@@ -1,4 +1,4 @@
-# Using models in migrations in Laravel application
+# Using models in Laravel migrations
 
 Migrations in simple cases just change your database structure, add tables and columns, and you don't have to change the data you already have stored in your database. But there are cases, when it is also necessary to change data when running database migrations.
 
